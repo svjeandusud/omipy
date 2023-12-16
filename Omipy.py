@@ -17,6 +17,9 @@ class Omipy:
         self.pic.usetikzlibrary('decorations.markings')
 
     def draw_coord(self):
+        # background
+        self.scope.draw((-1, -1), rectangle((self.width+1, self.height+1)), opt='fill=white')
+
         # horizontal axis and label
         self.scope.draw((0, 0), lineto((self.width*self.coord.x['scale'], 0)), node('$'+self.coord.x['name']+'$', right=True), coordinate(name=self.coord.x['name']),opt='->')
         # vertical axis and label

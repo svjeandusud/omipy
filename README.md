@@ -14,3 +14,4 @@ figure.draw_track(x = 1, y = 1,  cog = 45, sog = 7.1)
 figure.draw_estimated_position(x = 6, y = 6, time='1100')
 figure.print_file('myfigure.png', dpi=500)
 ```
+![](myfigure.png)

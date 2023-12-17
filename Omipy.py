@@ -1,7 +1,6 @@
 from tikz import * 
 import math
 
-
 class Coordinates:
     def __init__(self):
         self.x = {"name" : "x", "units": "nm", "show_units": True, "show_name": False, "scale": 1}
@@ -15,11 +14,11 @@ class Omipy:
         self.width = width
         self.height = height
         self.pic.usetikzlibrary('decorations.markings')
-
-    def draw_coord(self):
         # background
         self.scope.draw((-1, -1), rectangle((self.width+1, self.height+1)), opt='fill=white')
 
+
+    def draw_coord(self):
         # horizontal axis and label
         self.scope.draw((0, 0), lineto((self.width*self.coord.x['scale'], 0)), node('$'+self.coord.x['name']+'$', right=True), coordinate(name=self.coord.x['name']),opt='->')
         # vertical axis and label
@@ -105,7 +104,13 @@ class Omipy:
     
     def draw_LOP_transfered(self, x = 1, y = 1, a = 0, l = 1, time='', time_t = ''):
         dy, dx = self.compute_dydx(a, l, 1)
-        self.scope.draw((x,y), lineto((x+dx, y + dy)), node(time, above=True, opt='near start'), node('\tiny' + time_t, above=True, opt='near end'), opt='<<->>')
-    
+        self.scope.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above=True, opt='near start'), node('\tiny' + time_t, above=True, opt='near end'), opt='<<->>')
+
+    def draw_DR(self, x = 1, y = 1, a = 0, time = ''):
+        dx, dy = self.compute_dydx(-(a-90)+90, 0.1, 1)
+        self.pic.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above = True, right=True))
+        dx, dy = self.compute_dydx(-(a+90)+90, 0.1, 1)
+        self.scope.draw((x,y), lineto((x+dx, y + dy)))
+
     def print_file(self, name, dpi):
         self.pic.write_image(name, dpi)

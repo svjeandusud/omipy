@@ -1,42 +1,95 @@
 from tikz import * 
 import math
 
-class Coordinates:
-    def __init__(self):
-        self.x = {"name" : "x", "units": "nm", "show_units": True, "show_name": False, "scale": 1}
-        self.y = {"name" : "y", "units": "nm", "show_units": True, "show_name": False, "scale": 1}
-
 class Omipy:
-    def __init__(self, width = 10, height = 10):
+    def __init__(self, width = 10, height = 10, draw_coord = False):
+        self.vectors = {'course':{}, 'current':{}, 'track':{}}
         self.pic = Picture()
-        self.coord = Coordinates()
-        self.scope = self.pic.scope()
-        self.width = width
-        self.height = height
         self.pic.usetikzlibrary('decorations.markings')
+        self.dims = (width, height)
         # background
-        self.scope.draw((-1, -1), rectangle((self.width+1, self.height+1)), opt='fill=white')
+        self.pic.draw((-1, -1), rectangle((self.dims[0]+1, self.dims[1]+1)), opt='fill=white')
+        if draw_coord == True: 
+            self.draw_coord()
+    
+    def update_vector(self, name):
+        dy, dx = self.compute_dydx(name)
+        self.vectors[name]['y1'] = self.vectors[name]['y0'] + dy
+        self.vectors[name]['x1'] = self.vectors[name]['x0'] + dx
 
+    def set_current(self, set = 45, drift = 2, x = 1, y = 1, t = 1):
+        self.vectors['current'] = {'c':set, 's':drift, 't':t, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        self.update_vector('current')
+    
+    def set_track(self, cog = 45, sog = 20, x = 1, y = 1,  t = 1):
+        self.vectors['track'] = {'c':cog, 's':sog, 't':t, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        self.update_vector('track')
 
-    def draw_coord(self):
-        # horizontal axis and label
-        self.scope.draw((0, 0), lineto((self.width*self.coord.x['scale'], 0)), node('$'+self.coord.x['name']+'$', right=True), coordinate(name=self.coord.x['name']),opt='->')
-        # vertical axis and label
-        self.scope.draw((0, 0), lineto((0, self.height*self.coord.x['scale'])), node('$'+self.coord.y['name']+'$', above=True), coordinate(name=self.coord.y['name']),opt='->')
+    def set_course(self, c = 45, s = 20, x = 1, y = 1, t = 1):
+        self.vectors['course'] = {'c':c, 's':s, 't':t, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        self.update_vector('course')
 
-        for x in range(1, self.width):
-            self.scope.draw('(0pt,1pt)', lineto('(0pt,-1pt)'), node(f'${x}$', below=True, fill='white'),xshift=f'{x} cm')
+    def compute_dydx(self, vector_name):
+        dx = self.vectors[vector_name]["s"] * math.cos(2 * math.pi / 360 * (- self.vectors[vector_name]["c"] + 90)) * self.vectors[vector_name]["t"]
+        dy = self.vectors[vector_name]["s"] * math.sin(2 * math.pi / 360 * (- self.vectors[vector_name]["c"] + 90)) * self.vectors[vector_name]["t"]
+        return [dy, dx]
 
-        # ticks and tick labels on vertical axis
-        for y in range(1, self.height):
-            self.scope.draw('(1pt,0pt)', lineto('(-1pt,0pt)'), node(f'${y}$', left=True, fill='white'), yshift=f'{y} cm')
+    def solve_track(self, time):
+        self.vectors['track'] = {'c':0, 's':0, 't':self.vectors['course']['t'], 'x0':1, 'y0':1, 'x1': -1, 'y1': -1}
+        #Set the current at the end of the course
+        self.vectors["current"]['x0'] = self.vectors["course"]['x1'] 
+        self.vectors["current"]['y0'] = self.vectors["course"]['y1'] 
+        self.update_vector("current")
+        self.compute_track(update_sog = True)
+        self.make_diagram(time)
 
-    def draw_fix(self, x = 1, y = 1, radius=0.25, time = ''):
-        self.pic.draw((x, y), circle(radius=radius))
-        self.pic.draw((x, y), circle(radius=0.03), fill='black')
-        if time != '':
-            self.pic.draw((x + radius*0.8, y + radius*0.8), node(r'\tiny ' + time, anchor='base west'))
+    def compute_track(self, update_cog = False):
+        dy_co, dx_co = self.compute_dydx("course")
+        dy_cu, dx_cu = self.compute_dydx("current")
+        sog = round(pow((dy_co + dy_cu)**2 + (dx_co + dx_cu)**2, 0.5), 1)
+        cog = -math.atan((dy_co + dy_cu)/(dx_co + dx_cu)) / (2 * math.pi) * 360 + 90
+        self.vectors["track"]['s'] = sog
+        if update_cog == True: 
+            self.vectors["track"]['c'] = cog
+        self.update_vector("track")
 
+    def draw_generic(self, vector_name):
+        if "course" in vector_name:
+            arr = ">"
+        elif "track" in vector_name:
+            arr = ">>"
+        elif "current" in vector_name: 
+            arr = ">>>"
+        else:
+            arr = ''
+        this_scope = self.pic.scope('thick,decoration={markings, mark=at position 0.8 with {\\arrow{'+arr+'}}}') 
+        if self.vectors[vector_name]['c'] > 180 : 
+            this_scope.draw((self.vectors[vector_name]['x0'], self.vectors[vector_name]['y0']), lineto((self.vectors[vector_name]['x1'], self.vectors[vector_name]['y1'])), node('\\tiny $'+str("{:03d}".format(int(round(self.vectors[vector_name]['c'],0))))+'^{\circ}$', above=True, midway=True, rotate=-self.vectors[vector_name]['c']+90-180), node('\\tiny $'+str("{:.1f}".format(self.vectors[vector_name]['s']))+'$', below=True, midway=True, rotate=-self.vectors[vector_name]['c']+90-180), opt='postaction={decorate}')
+        else:
+            this_scope.draw((self.vectors[vector_name]['x0'], self.vectors[vector_name]['y0']), lineto((self.vectors[vector_name]['x1'], self.vectors[vector_name]['y1'])), node('\\tiny $'+str("{:03d}".format(int(round(self.vectors[vector_name]['c'],0))))+'^{\circ}$', above=True, midway=True, rotate=-self.vectors[vector_name]['c']+90), node('\\tiny $'+str("{:.1f}".format(self.vectors[vector_name]['s']))+'$', below=True, midway=True, rotate=-self.vectors[vector_name]['c']+90), opt='postaction={decorate}')
+    
+    def make_diagram(self, time, draw_dr = True):
+        for some_vector in ["course", "track", "current"]:
+            self.update_vector(some_vector)
+            self.draw_generic(some_vector)
+        self.draw_estimated_position(self.vectors["track"]['x1'], self.vectors["track"]['y1'], radius = 0.3, time = time)
+        if draw_dr == True: 
+            self.draw_DR(self.vectors["course"]['x1'], self.vectors["course"]['y1'], a = 0.3, time = time)
+    
+    def solve_course(self, s, time):
+        #Set the current at the origin of the track vector
+        for dim in ['x0', 'y0']:
+            self.vectors["current"][dim] = self.vectors["track"][dim]
+        self.update_vector('current')
+        #Set the course at the end of the current
+        self.vectors['course'] = {'c':0, 's':s, 't':self.vectors['track']['t'], 'x0':self.vectors['current']['x1'], 'y0':self.vectors['current']['y1'], 'x1': -1, 'y1': -1}
+        self.update_vector('course')
+        #Lovely trig solution
+        self.vectors['course']['c'] = -1 * 360 / (2*math.pi) * math.asin(self.vectors['current']['s']/self.vectors['course']['s'] * math.sin(math.pi*2/360*(self.vectors['current']['c'] - self.vectors['track']['c'])))+ self.vectors["track"]['c']
+        self.update_vector('course')
+        self.compute_track(update_cog = False)
+        self.make_diagram(time, draw_dr = False)
+        
     def draw_estimated_position(self, x = 1, y = 1, radius=0.3, time = ''):
         self.pic.draw((x - radius*math.cos(math.pi/6), y - radius*math.sin(math.pi/6)), lineto((x, y+radius)))
         self.pic.draw((x - radius*math.cos(math.pi/6), y - radius*math.sin(math.pi/6)), lineto((x + radius*math.cos(math.pi/6), y - radius*math.sin(math.pi/6))))
@@ -44,73 +97,48 @@ class Omipy:
         self.pic.draw((x, y), circle(radius=0.03), fill='black')
         if time != '':
             self.pic.draw((x + radius*0.7, y + radius*0.7), node(r'\tiny ' + time, anchor='base west'))
-        
-    def compute_dydx(self, c, s, t):
-        dx = s*math.cos(2*math.pi / 360 * (-c+90)) * t
-        dy = s*math.sin(2*math.pi / 360 * (-c+90)) * t
-        return [dy, dx]
     
-    def draw_generic(self, x, y, c, s, t, numarrows):
-        if numarrows == 1:
-            arr = ">"
-        elif numarrows == 2:
-            arr = ">>"
-        else: 
-            arr = ">>>"
-        dy, dx = self.compute_dydx(c, s, t)
-        this_scope = self.pic.scope('thick,decoration={markings, mark=at position 0.8 with {\\arrow{'+arr+'}}}') 
-        this_scope.draw((x, y), lineto((x + dx, y + dy)), node('\\tiny $'+str("{:03d}".format(c))+'^{\circ}$', above=True, midway=True, rotate=-c+90), node('\\tiny $'+str("{:.1f}".format(s))+'$', below=True, midway=True, rotate=-c+90), opt='postaction={decorate}')
-    
-    def draw_course(self, x=1, y=1, c=45, s=5, t = 1):
-        self.course = {'c':c, 's':s, 't':t, 'x':x, 'y':y}
-        self.draw_generic(x, y, c, s, t, 1)
+    def draw_course(self):
+        self.draw_generic("course")
         
-    def draw_track(self, x = 1, y =1, cog=45, sog=5, t = 1):
-        self.track = {'c':cog, 's':sog, 't':t, 'x':x, 'y':y}
-        self.draw_generic(x, y, cog, sog, t, 2)
+    def draw_track(self):
+        self.draw_generic("track")
         
-    def draw_current(self, x=1, y=1, set=45, drift=5, t = 1):
-        self.current = {'c':set, 's':drift, 't':t, 'x':x, 'y':y}
-        self.draw_generic(x, y, set, drift, t, 3)
-    
-    def solve_track(self, time):
-        dy1, dx1 = self.compute_dydx(self.course['c'], self.course['s'], self.course['t'])
-        dy2, dx2 = self.compute_dydx(self.current['c'], self.current['s'], self.current['t'])
-        sog = pow((dy1 + dy2)**2 + (dx1+dx2)**2, 0.5)
-        sog = round(sog, 1)
-        cog = math.atan((dy1 + dy2)/dx1+dx2)/(2*math.pi)*360
-        cog = int(round(cog, 0))
-        cog = -cog + 90
-        x = self.course['x'] 
-        y = self.course['y']
-        self.draw_generic(x, y, cog, sog, self.current['t'], 2)
-        self.draw_estimated_position(x + + dx1 + dx2,y + dy1 + dy2, radius = 0.3, time=time)
-        
-    def solve_course(self, time):
-        dy1, dx1 = self.compute_dydx(self.track['c'], self.track['s'], self.track['t'])
-        dy2, dx2 = self.compute_dydx(self.current['c'], self.current['s'], self.current['t'])
-        s = pow((-dy1 + dy2)**2 + (-dx1+dx2)**2, 0.5)
-        s = round(s, 1)
-        c = math.atan((dy1 + dy2)/dx1+dx2)/(2*math.pi)*360
-        c = int(round(c, 0))
-        c = -c + 90
-        x = self.current['x']
-        y = self.current['y']
-        self.draw_generic(x, y, c, s, self.current['t'], 1)
-        
+    def draw_current(self):
+        self.draw_generic("current")
+
+    def draw_fix(self, x = 1, y = 1, radius=0.25, time = ''):
+        self.pic.draw((x, y), circle(radius=radius))
+        self.pic.draw((x, y), circle(radius=0.03), fill='black')
+        if time != '':
+            self.pic.draw((x + radius*0.8, y + radius*0.8), node(r'\tiny ' + time, anchor='base west'))
+
+    def draw_coord(self):
+        temp = self.pic.scope()
+        temp.draw((0, 0), lineto((self.dims[0], 0)), node('$x$', right=True), coordinate('x'),opt='->')
+        temp.draw((0, 0), lineto((0, self.dims[1])), node('$y$', above=True), coordinate('y'),opt='->')
+        for x in range(1, self.dims[0]):
+            temp.draw('(0pt,1pt)', lineto('(0pt,-1pt)'), node(f'${x}$', below=True, fill='white'),xshift=f'{x} cm')
+        for y in range(1, self.dims[1]):
+            temp.draw('(1pt,0pt)', lineto('(-1pt,0pt)'), node(f'${y}$', left=True, fill='white'), yshift=f'{y} cm')
+
     def draw_LOP(self, x = 1, y = 1, a = 0, l = 1, time=''):
-        dy, dx = self.compute_dydx(a, l, 1)
-        self.scope.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny' + time, above=True, opt='near start'), opt='->')
+        self.vectors["temp"] = {'c':a, 's':l, 't':0, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        dy, dx = self.compute_dydx("temp")
+        self.pic.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny' + time, above=True, opt='near start'), opt='->')
     
     def draw_LOP_transfered(self, x = 1, y = 1, a = 0, l = 1, time='', time_t = ''):
-        dy, dx = self.compute_dydx(a, l, 1)
-        self.scope.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above=True, opt='near start'), node('\tiny' + time_t, above=True, opt='near end'), opt='<<->>')
+        self.vectors["temp"] = {'c':a, 's':l, 't':0, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        dy, dx = self.compute_dydx("temp")
+        self.pic.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above=True, opt='near start'), node('\tiny' + time_t, above=True, opt='near end'), opt='<<->>')
 
     def draw_DR(self, x = 1, y = 1, a = 0, time = ''):
-        dx, dy = self.compute_dydx(-(a-90)+90, 0.1, 1)
+        self.vectors["temp"] = {'c':-(a-90)+90, 's':0.1, 't':0, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        dy, dx = self.compute_dydx("temp")
         self.pic.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above = True, right=True))
-        dx, dy = self.compute_dydx(-(a+90)+90, 0.1, 1)
-        self.scope.draw((x,y), lineto((x+dx, y + dy)))
+        self.vectors["temp"] = {'c':-(a+90)+90, 's':0.1, 't':0, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        dy, dx = self.compute_dydx("temp")
+        self.pic.draw((x,y), lineto((x+dx, y + dy)))
 
     def print_file(self, name, dpi):
         self.pic.write_image(name, dpi)

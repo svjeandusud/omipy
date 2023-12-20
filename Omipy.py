@@ -35,24 +35,27 @@ class Omipy:
         return [dy, dx]
 
     def solve_track(self, time):
-        self.vectors['track'] = {'c':0, 's':0, 't':self.vectors['course']['t'], 'x0':1, 'y0':1, 'x1': -1, 'y1': -1}
+        self.vectors['track'] = {'c':0, 's':0, 't':self.vectors['course']['t'], 'x0':self.vectors['course']['x0'], 'y0':self.vectors['course']['y0'], 'x1': -1, 'y1': -1}
         #Set the current at the end of the course
         self.vectors["current"]['x0'] = self.vectors["course"]['x1'] 
         self.vectors["current"]['y0'] = self.vectors["course"]['y1'] 
         self.update_vector("current")
-        self.compute_track(update_sog = True)
+        self.compute_track(update_cog = True)
         self.make_diagram(time)
 
     def compute_track(self, update_cog = False):
         dy_co, dx_co = self.compute_dydx("course")
         dy_cu, dx_cu = self.compute_dydx("current")
-        sog = round(pow((dy_co + dy_cu)**2 + (dx_co + dx_cu)**2, 0.5), 1)
+        sog = pow((dy_co + dy_cu) ** 2 + (dx_co + dx_cu) ** 2, 0.5) / self.vectors["course"]["t"]
         cog = -math.atan((dy_co + dy_cu)/(dx_co + dx_cu)) / (2 * math.pi) * 360 + 90
         self.vectors["track"]['s'] = sog
         if update_cog == True: 
             self.vectors["track"]['c'] = cog
         self.update_vector("track")
-
+        dy_tr, dx_tr = self.compute_dydx("track")
+        if abs(dy_tr - (dy_cu + dy_co)) > 0.1 or abs(dx_tr - (dx_cu + dx_co)) > 0.1:
+            self.vectors["track"]["c"] = (self.vectors["track"]["c"] + 180) % 360
+            self.update_vector("track")
     def draw_generic(self, vector_name):
         if "course" in vector_name:
             arr = ">"
@@ -74,7 +77,7 @@ class Omipy:
             self.draw_generic(some_vector)
         self.draw_estimated_position(self.vectors["track"]['x1'], self.vectors["track"]['y1'], radius = 0.3, time = time)
         if draw_dr == True: 
-            self.draw_DR(self.vectors["course"]['x1'], self.vectors["course"]['y1'], a = 0.3, time = time)
+            self.draw_DR(self.vectors["course"]['x1'], self.vectors["course"]['y1'], a = self.vectors["course"]["c"], time = time)
     
     def solve_course(self, s, time):
         #Set the current at the origin of the track vector
@@ -133,12 +136,12 @@ class Omipy:
         self.pic.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above=True, opt='near start'), node('\tiny' + time_t, above=True, opt='near end'), opt='<<->>')
 
     def draw_DR(self, x = 1, y = 1, a = 0, time = ''):
-        self.vectors["temp"] = {'c':-(a-90)+90, 's':0.1, 't':0, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        self.vectors["temp"] = {'c':(a-90), 's':0.1, 't':self.vectors['course']['t'], 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
         dy, dx = self.compute_dydx("temp")
-        self.pic.draw((x,y), lineto((x+dx, y + dy)), node('\\tiny'+time, above = True, right=True))
-        self.vectors["temp"] = {'c':-(a+90)+90, 's':0.1, 't':0, 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
+        self.pic.draw((x, y), lineto((x + dx, y + dy)), node('\\tiny'+time, above = True, right=True))
+        self.vectors["temp"] = {'c':(a+90), 's':0.1, 't':self.vectors['course']['t'], 'x0':x, 'y0':y, 'x1': -1, 'y1': -1}
         dy, dx = self.compute_dydx("temp")
-        self.pic.draw((x,y), lineto((x+dx, y + dy)))
+        self.pic.draw((x,y), lineto((x + dx, y + dy)))
 
     def print_file(self, name, dpi):
         self.pic.write_image(name, dpi)

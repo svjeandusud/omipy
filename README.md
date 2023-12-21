@@ -1,5 +1,14 @@
 # Omipy : Creating Coastal Navigation Figures With Python
-This short class is a wrapper around pytikz to generate coastal navigation figures. Fixes, lines of positions, course, track, current, etc. 
+This short class is a wrapper around [pytikz](https://github.com/allefeld/pytikz) to generate coastal navigation figures. Fixes, lines of positions, course, track, current, etc. 
+
+## Installation
+A python interpreter must be installed on your computer. This is installed by default on Apple Computers, on Linux Operating Systems ... but me installed on Windows Computer. The standard installation instructions can be found [here](https://www.python.org/downloads/windows/), but a troubleless installation is perhaps more likely to happen by installing the [Anaconda suite](https://www.anaconda.com/download).
+
+The [pytikz](https://github.com/allefeld/pytikz) package must also be installed. This can be done with the simple pip command: 
+```
+pip install git+https://github.com/allefeld/pytikz.git
+``` 
+If you have no idea what this means, you can [read the documentation](https://packaging.python.org/en/latest/tutorials/installing-packages/) or google it. 
 
 ## Examples
 ### Basic Usage
